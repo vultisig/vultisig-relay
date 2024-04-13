@@ -1,8 +1,11 @@
-package handler
+package server
 
 import (
 	"errors"
 	"fmt"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
+	"github.com/voltix-vault/voltix-router/contexthelper"
 	"net/http"
 	"strings"
 
@@ -19,6 +22,31 @@ type Server struct {
 // NewServer returns a new server.
 func NewServer(port int64, s storage.Storage) *Server {
 	return &Server{s: s}
+}
+
+func (s *Server) StartServer() error {
+	e := echo.New()
+	e.Logger.SetLevel(log.DEBUG)
+	e.Pre(middleware.RemoveTrailingSlash())
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
+	e.GET("/ping", s.Ping)
+	e.POST("/:sessionID", s.StartSession)
+	e.GET("/:sessionID", s.GetSession)
+	e.DELETE("/:sessionID", s.DeleteSession)
+	e.POST("/message/:sessionID", s.PostMessage)
+	e.GET("/message/:sessionID/:participantID", s.GetMessage)
+	e.DELETE("/message/:sessionID/:participantID/:hash", s.DeleteMessage)
+	e.POST("/start/:sessionID", s.StartTSSSession)
+	e.GET("/start/:sessionID", s.GetStartTSSSession)
+	e.POST("/complete/:sessionID", s.SetCompleteTSSSession)
+	e.GET("/complete/:sessionID", s.GetCompleteTSSSession)
+	return e.Start(fmt.Sprintf(":%d", s.port))
+
+}
+func (s *Server) Ping(c echo.Context) error {
+	return c.String(http.StatusOK, "Voltix Router is running")
 }
 
 // StartSession is to start a new session that will be used to send and receive messages.
@@ -56,7 +84,6 @@ func (s *Server) DeleteSession(c echo.Context) error {
 	if sessionID == "" {
 		return c.NoContent(http.StatusBadRequest)
 	}
-
 	if err := s.s.DeleteSession(c.Request().Context(), sessionID); err != nil { // delete session
 		c.Logger().Errorf("fail to delete session %s,err: %w", sessionID, err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -65,6 +92,9 @@ func (s *Server) DeleteSession(c echo.Context) error {
 }
 
 func (s *Server) GetMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	participantID := strings.TrimSpace(c.Param("participantID"))
 	if sessionID == "" || participantID == "" {
@@ -86,6 +116,9 @@ func (s *Server) GetMessage(c echo.Context) error {
 
 // DeleteMessage is to delete a message.
 func (s *Server) DeleteMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	participantID := strings.TrimSpace(c.Param("participantID"))
 	messageID := c.Request().Header.Get("message_id")
@@ -105,6 +138,9 @@ func (s *Server) DeleteMessage(c echo.Context) error {
 }
 
 func (s *Server) PostMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	if sessionID == "" {
 		c.Logger().Error("session ID is empty")
@@ -129,12 +165,53 @@ func (s *Server) PostMessage(c echo.Context) error {
 	}
 	return c.NoContent(http.StatusAccepted)
 }
-
-func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
+func (s *Server) handleTSSSession(c echo.Context, sessionPrefix string) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
 	}
-	return false
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	var p []string
+	if err := c.Bind(&p); err != nil {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	key := fmt.Sprintf("%s-%s", sessionPrefix, sessionID)
+	if err := s.s.SetSession(c.Request().Context(), key, p); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.NoContent(http.StatusOK)
+}
+func (s *Server) getTSSSession(c echo.Context, sessionPrefix string) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	key := fmt.Sprintf("%s-%s", sessionPrefix, sessionID)
+	participants, err := s.s.GetSession(c.Request().Context(), key)
+	if err != nil {
+		return c.NoContent(http.StatusNotFound)
+	}
+	return c.JSON(http.StatusOK, participants)
+}
+
+func (s *Server) StartTSSSession(c echo.Context) error {
+	return s.handleTSSSession(c, "start")
+}
+
+func (s *Server) GetStartTSSSession(c echo.Context) error {
+	return s.getTSSSession(c, "start")
+}
+
+func (s *Server) SetCompleteTSSSession(c echo.Context) error {
+	return s.handleTSSSession(c, "complete")
+}
+
+func (s *Server) GetCompleteTSSSession(c echo.Context) error {
+	return s.getTSSSession(c, "complete")
 }
