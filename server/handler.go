@@ -3,13 +3,16 @@ package server
 import (
 	"errors"
 	"fmt"
-	"github.com/labstack/echo/v4/middleware"
-	"github.com/labstack/gommon/log"
-	"github.com/voltix-vault/voltix-router/contexthelper"
+	"github.com/rs/xid"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
+	"github.com/voltix-vault/voltix-router/contexthelper"
+	"github.com/voltix-vault/voltix-router/db"
 	"github.com/voltix-vault/voltix-router/model"
 	"github.com/voltix-vault/voltix-router/storage"
 )
@@ -17,11 +20,16 @@ import (
 type Server struct {
 	port int64
 	s    storage.Storage
+	dbs  *db.DBStorage
 }
 
 // NewServer returns a new server.
-func NewServer(port int64, s storage.Storage) *Server {
-	return &Server{s: s}
+func NewServer(port int64, s storage.Storage, dbs *db.DBStorage) *Server {
+	return &Server{
+		port: port,
+		s:    s,
+		dbs:  dbs,
+	}
 }
 
 func (s *Server) StartServer() error {
@@ -32,21 +40,98 @@ func (s *Server) StartServer() error {
 	e.Use(middleware.Recover())
 	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
 	e.GET("/ping", s.Ping)
-	e.POST("/:sessionID", s.StartSession)
-	e.GET("/:sessionID", s.GetSession)
-	e.DELETE("/:sessionID", s.DeleteSession)
-	e.POST("/message/:sessionID", s.PostMessage)
-	e.GET("/message/:sessionID/:participantID", s.GetMessage)
-	e.DELETE("/message/:sessionID/:participantID/:hash", s.DeleteMessage)
-	e.POST("/start/:sessionID", s.StartTSSSession)
-	e.GET("/start/:sessionID", s.GetStartTSSSession)
-	e.POST("/complete/:sessionID", s.SetCompleteTSSSession)
-	e.GET("/complete/:sessionID", s.GetCompleteTSSSession)
+	group := e.Group("", middleware.BasicAuth(s.checkBasicAuthentication))
+	group.POST("/:sessionID", s.StartSession)
+	group.GET("/:sessionID", s.GetSession)
+	group.DELETE("/:sessionID", s.DeleteSession)
+	group.POST("/message/:sessionID", s.PostMessage)
+	group.GET("/message/:sessionID/:participantID", s.GetMessage)
+	group.DELETE("/message/:sessionID/:participantID/:hash", s.DeleteMessage)
+	group.POST("/start/:sessionID", s.StartTSSSession)
+	group.GET("/start/:sessionID", s.GetStartTSSSession)
+	group.POST("/complete/:sessionID", s.SetCompleteTSSSession)
+	group.GET("/complete/:sessionID", s.GetCompleteTSSSession)
+	group.POST("/register", s.RegisterVault)
+	// TODO add endpoint that will update user's payment status
+	e.POST("/userkey", s.CreateUserAPIKey)
 	return e.Start(fmt.Sprintf(":%d", s.port))
 
 }
 func (s *Server) Ping(c echo.Context) error {
 	return c.String(http.StatusOK, "Voltix Router is running")
+}
+
+func (s *Server) checkBasicAuthentication(username, password string, c echo.Context) (bool, error) {
+	// allow keygen to bypass basic auth
+	if strings.EqualFold(c.Request().Header.Get("keygen"), "voltix") {
+		return true, nil
+	}
+	// client should encode the basic authentication
+	// apikey:pubkey
+	apiKey := username
+	vaultPubKey := password
+	// check cache
+	user, err := s.s.GetUser(c.Request().Context(), apiKey)
+	if err != nil {
+		c.Logger().Errorf("fail to get user %s from cache, err: %s", username, err)
+	}
+	if user != nil {
+		// check number of vaults
+		return s.checkUserAndVaultPubKey(c, user, vaultPubKey)
+	}
+	// fallback to database
+	user, err = s.dbs.GetUser(c.Request().Context(), apiKey)
+	if err != nil {
+		c.Logger().Errorf("fail to get user %s from db, err: %s", apiKey, err)
+		return false, err
+	}
+	if user != nil {
+		if user.IsValid() {
+			// save the user to cache
+			if err := s.s.SetUser(c.Request().Context(), user.APIKey, *user); err != nil {
+				c.Logger().Errorf("fail to save user to cache for %s, err: %s", user.APIKey, err)
+			}
+		}
+		return s.checkUserAndVaultPubKey(c, user, vaultPubKey)
+	}
+	return false, nil
+}
+
+func (s *Server) checkUserAndVaultPubKey(c echo.Context, user *model.User, vaultPubKey string) (bool, error) {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return false, c.Request().Context().Err()
+	}
+	if !user.IsValid() {
+		return false, nil
+	}
+	c.Set("user", user)
+	if vaultPubKey == "" {
+		return false, nil
+	}
+	vaults, err := s.s.GetUserVault(c.Request().Context(), user.APIKey)
+	if err != nil {
+		c.Logger().Errorf("fail to get user vault %s, err: %s", user.APIKey, err)
+	}
+	if len(vaults) > 0 {
+		if slices.Contains(vaults, vaultPubKey) {
+			return true, nil
+		}
+	}
+	vaults, err = s.dbs.GetVaultPubKeys(c.Request().Context(), user.ID)
+	if err != nil {
+		c.Logger().Errorf("fail to get user vault %s, err: %s", user.APIKey, err)
+		return false, fmt.Errorf("fail to get user vault %s, err: %w", user.APIKey, err)
+	}
+	if len(vaults) > 0 {
+		// save it to cache
+		if err := s.s.SetUserVault(c.Request().Context(), user.APIKey, vaults); err != nil {
+			c.Logger().Errorf("fail to set user vault %s, err: %s", user.APIKey, err)
+		}
+		if slices.Contains(vaults, vaultPubKey) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // StartSession is to start a new session that will be used to send and receive messages.
@@ -214,4 +299,40 @@ func (s *Server) SetCompleteTSSSession(c echo.Context) error {
 
 func (s *Server) GetCompleteTSSSession(c echo.Context) error {
 	return s.getTSSSession(c, "complete")
+}
+func (s *Server) RegisterVault(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	user := c.Get("user").(*model.User)
+	if user == nil {
+		return c.NoContent(http.StatusUnauthorized)
+	}
+
+	var vaultKeys struct {
+		PubKeyECDSA string `json:"pub_key_ecdsa,omitempty"`
+		PubKeyEdDSA string `json:"pub_key_eddsa,omitempty"`
+	}
+
+	if err := c.Bind(&vaultKeys); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusBadRequest)
+	}
+	if err := s.dbs.RegisterVault(c.Request().Context(), user.ID, vaultKeys.PubKeyECDSA, vaultKeys.PubKeyEdDSA, user.NoOfVaults); err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.NoContent(http.StatusCreated)
+}
+
+func (s *Server) CreateUserAPIKey(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	apiKey := xid.New().String()
+	if err := s.dbs.NewUser(c.Request().Context(), apiKey); err != nil {
+		c.Logger().Errorf("fail to create user %s, err: %s", apiKey, err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.JSON(http.StatusCreated, apiKey)
 }

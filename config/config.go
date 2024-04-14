@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	Port        int64       `json:"port"`
-	RedisServer RedisServer `json:"redis_server"`
+	Port             int64       `json:"port"`
+	RedisServer      RedisServer `json:"redis_server"`
+	ConnectionString string      `json:"connection_string"`
 }
 
 type RedisServer struct {
