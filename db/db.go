@@ -87,14 +87,19 @@ func (d *DBStorage) RegisterVault(ctx context.Context, userID int64, pubKeyECDSA
 	if contexthelper.CheckCancellation(ctx) != nil {
 		return ctx.Err()
 	}
+
 	var count int64
-	if err := d.db.QueryRowContext(ctx, "SELECT count(*) FROM Vaults WHERE user_id = ? and vault_pubkey_ecdsa=? and vault_pubkey_eddsa=?", userID, pubKeyECDSA, pubKeyEdDSA).Scan(&count); err != nil {
+	if err := d.db.QueryRowContext(ctx, "SELECT count(*) FROM vaults WHERE user_id = ? and vault_pubkey_ecdsa=? and vault_pubkey_eddsa=?", userID, pubKeyECDSA, pubKeyEdDSA).Scan(&count); err != nil {
 		return fmt.Errorf("fail to register vault, err: %w", err)
 	}
 	if count > 0 { // already registered
 		return nil
 	}
-	if count == totalAllowedCount {
+	var totalCount int64
+	if err := d.db.QueryRowContext(ctx, "SELECT count(*) FROM vaults WHERE user_id = ? ", userID).Scan(&totalCount); err != nil {
+		return fmt.Errorf("fail to register vault, err: %w", err)
+	}
+	if totalCount == totalAllowedCount {
 		return fmt.Errorf("vault limit reached")
 	}
 	_, err := d.db.ExecContext(ctx, "INSERT INTO vaults (user_id, vault_pubkey_ecdsa, vault_pubkey_eddsa) VALUES (?, ?, ?)", userID, pubKeyECDSA, pubKeyEdDSA)

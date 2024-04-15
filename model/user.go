@@ -8,7 +8,7 @@ import (
 type User struct {
 	ID         int64        `json:"id,omitempty"`
 	APIKey     string       `json:"api_key,omitempty"`
-	CreatedAt  time.Time    `json:"created_at"`
+	CreatedAt  sql.NullTime `json:"created_at"`
 	ExpiredAt  sql.NullTime `json:"expired_at"`
 	NoOfVaults int64        `json:"no_of_vaults,omitempty"`
 	IsPaid     bool         `json:"is_paid,omitempty"`
@@ -17,7 +17,7 @@ type User struct {
 func (u User) IsValid() bool {
 	if u.ID == 0 ||
 		u.APIKey == "" ||
-		u.CreatedAt.IsZero() {
+		!u.CreatedAt.Valid {
 		return false
 	}
 	// user didn't paid

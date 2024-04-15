@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/rs/xid"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -52,8 +53,9 @@ func (s *Server) StartServer() error {
 	group.POST("/complete/:sessionID", s.SetCompleteTSSSession)
 	group.GET("/complete/:sessionID", s.GetCompleteTSSSession)
 	group.POST("/register", s.RegisterVault)
-	// TODO add endpoint that will update user's payment status
-	e.POST("/userkey", s.CreateUserAPIKey)
+
+	reg := e.Group("/register", middleware.BasicAuth(s.checkBasicAuthenticationUserOnly))
+	reg.POST("/vault", s.RegisterVault)
 	return e.Start(fmt.Sprintf(":%d", s.port))
 
 }
@@ -93,6 +95,41 @@ func (s *Server) checkBasicAuthentication(username, password string, c echo.Cont
 			}
 		}
 		return s.checkUserAndVaultPubKey(c, user, vaultPubKey)
+	}
+	return false, nil
+}
+
+func (s *Server) checkBasicAuthenticationUserOnly(username, password string, c echo.Context) (bool, error) {
+	// client should encode the basic authentication
+	// apikey:pubkey
+	apiKey := username
+	// check cache
+	user, err := s.s.GetUser(c.Request().Context(), apiKey)
+	if err != nil {
+		c.Logger().Errorf("fail to get user %s from cache, err: %s", username, err)
+	}
+	if user != nil {
+		if user.IsValid() {
+			c.Set("user", user)
+			return true, nil
+		}
+		return false, nil
+	}
+	// fallback to database
+	user, err = s.dbs.GetUser(c.Request().Context(), apiKey)
+	if err != nil {
+		c.Logger().Errorf("fail to get user %s from db, err: %s", apiKey, err)
+		return false, err
+	}
+	if user != nil {
+		if user.IsValid() {
+			c.Set("user", user)
+			// save the user to cache
+			if err := s.s.SetUser(c.Request().Context(), user.APIKey, *user); err != nil {
+				c.Logger().Errorf("fail to save user to cache for %s, err: %s", user.APIKey, err)
+			}
+			return true, nil
+		}
 	}
 	return false, nil
 }
@@ -181,7 +218,12 @@ func (s *Server) GetMessage(c echo.Context) error {
 		return c.NoContent(http.StatusRequestTimeout)
 	}
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
-	participantID := strings.TrimSpace(c.Param("participantID"))
+	rawParticipantID, err := url.QueryUnescape(c.Param("participantID"))
+	if err != nil {
+		c.Logger().Errorf("fail to unescape participant ID %s, err: %w", c.Param("participantID"), err)
+		return c.NoContent(http.StatusBadRequest)
+	}
+	participantID := strings.TrimSpace(rawParticipantID)
 	if sessionID == "" || participantID == "" {
 		return c.NoContent(http.StatusBadRequest)
 	}
@@ -195,7 +237,9 @@ func (s *Server) GetMessage(c echo.Context) error {
 	if errors.Is(err, storage.ErrNotFound) {
 		return c.NoContent(http.StatusOK)
 	}
-
+	if messages == nil {
+		messages = []model.Message{}
+	}
 	return c.JSON(http.StatusOK, messages)
 }
 
@@ -205,7 +249,12 @@ func (s *Server) DeleteMessage(c echo.Context) error {
 		return c.NoContent(http.StatusRequestTimeout)
 	}
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
-	participantID := strings.TrimSpace(c.Param("participantID"))
+	rawParticipantID, err := url.QueryUnescape(c.Param("participantID"))
+	if err != nil {
+		c.Logger().Errorf("fail to unescape participant ID %s, err: %w", c.Param("participantID"), err)
+		return c.NoContent(http.StatusBadRequest)
+	}
+	participantID := strings.TrimSpace(rawParticipantID)
 	messageID := c.Request().Header.Get("message_id")
 	msgHash := strings.TrimSpace(c.Param("hash"))
 	if sessionID == "" || participantID == "" || msgHash == "" {
