@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/voltix-vault/voltix-router/contexthelper"
@@ -46,7 +47,7 @@ func (d *DBStorage) GetUser(ctx context.Context, apiKey string) (*model.User, er
 		&user.NoOfVaults,
 		&user.IsPaid)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("fail to query user, err: %w", err)
@@ -66,13 +67,13 @@ func (d *DBStorage) NewUser(ctx context.Context, apiKey string) error {
 func (d *DBStorage) UpdateUser(ctx context.Context, apiKey string,
 	expiryAt time.Time,
 	noOfVault int,
-	is_paid bool,
+	isPaid bool,
 	amount float64,
 	paymentTxID string) error {
 	if contexthelper.CheckCancellation(ctx) != nil {
 		return ctx.Err()
 	}
-	_, err := d.db.ExecContext(ctx, "UPDATE users SET expired_at = ?, no_of_vaults = ?, is_paid = ? WHERE api_key = ?", expiryAt, noOfVault, is_paid, apiKey)
+	_, err := d.db.ExecContext(ctx, "UPDATE users SET expired_at = ?, no_of_vaults = ?, is_paid = ? WHERE api_key = ?", expiryAt, noOfVault, isPaid, apiKey)
 	if err != nil {
 		return fmt.Errorf("fail to update user, err: %w", err)
 	}

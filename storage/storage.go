@@ -177,7 +177,7 @@ func (s *RedisStorage) DeleteMessages(ctx context.Context, key string) error {
 	return nil
 }
 
-// DeleteMessage deletes a message in the given key with hash equals to the given hasn
+// DeleteMessage deletes a message in the given key with hash equals to the given hash
 func (s *RedisStorage) DeleteMessage(ctx context.Context, key, hash string) error {
 	if contexthelper.CheckCancellation(ctx) != nil {
 		return ctx.Err()
@@ -261,4 +261,8 @@ func (s *RedisStorage) SetUserVault(ctx context.Context, apiKey string, vaultPub
 		return fmt.Errorf("fail to set expiration, err: %w", result.Err())
 	}
 	return nil
+}
+
+func (s *RedisStorage) Close() error {
+	return s.client.Close()
 }

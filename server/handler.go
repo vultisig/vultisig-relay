@@ -207,7 +207,7 @@ func (s *Server) DeleteSession(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	if err := s.s.DeleteSession(c.Request().Context(), sessionID); err != nil { // delete session
-		c.Logger().Errorf("fail to delete session %s,err: %w", sessionID, err)
+		c.Logger().Errorf("fail to delete session %s,err: %s", sessionID, err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 	return c.NoContent(http.StatusOK)
@@ -220,7 +220,7 @@ func (s *Server) GetMessage(c echo.Context) error {
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	rawParticipantID, err := url.QueryUnescape(c.Param("participantID"))
 	if err != nil {
-		c.Logger().Errorf("fail to unescape participant ID %s, err: %w", c.Param("participantID"), err)
+		c.Logger().Errorf("fail to unescape participant ID %s, err: %s", c.Param("participantID"), err)
 		return c.NoContent(http.StatusBadRequest)
 	}
 	participantID := strings.TrimSpace(rawParticipantID)
@@ -251,7 +251,7 @@ func (s *Server) DeleteMessage(c echo.Context) error {
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	rawParticipantID, err := url.QueryUnescape(c.Param("participantID"))
 	if err != nil {
-		c.Logger().Errorf("fail to unescape participant ID %s, err: %w", c.Param("participantID"), err)
+		c.Logger().Errorf("fail to unescape participant ID %s, err: %s", c.Param("participantID"), err)
 		return c.NoContent(http.StatusBadRequest)
 	}
 	participantID := strings.TrimSpace(rawParticipantID)
@@ -265,7 +265,7 @@ func (s *Server) DeleteMessage(c echo.Context) error {
 		key = fmt.Sprintf("%s-%s-%s", sessionID, participantID, messageID)
 	}
 	if err := s.s.DeleteMessage(c.Request().Context(), key, msgHash); err != nil {
-		c.Logger().Errorf("fail to delete message %s, err: %w", key, err)
+		c.Logger().Errorf("fail to delete message %s, err: %s", key, err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 	return c.NoContent(http.StatusOK)

@@ -29,4 +29,12 @@ func main() {
 	if err := s.StartServer(); err != nil {
 		panic(err)
 	}
+	err = dbs.Close()
+	if err != nil {
+		panic(err)
+	}
+	err = store.Close()
+	if err != nil {
+		panic(err)
+	}
 }
