@@ -6,7 +6,6 @@ import (
 	"github.com/rs/xid"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -41,7 +40,7 @@ func (s *Server) StartServer() error {
 	e.Use(middleware.Recover())
 	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
 	e.GET("/ping", s.Ping)
-	group := e.Group("", middleware.BasicAuth(s.checkBasicAuthentication))
+	group := e.Group("")
 	group.POST("/:sessionID", s.StartSession)
 	group.GET("/:sessionID", s.GetSession)
 	group.DELETE("/:sessionID", s.DeleteSession)
@@ -54,121 +53,11 @@ func (s *Server) StartServer() error {
 	group.GET("/complete/:sessionID", s.GetCompleteTSSSession)
 	group.POST("/register", s.RegisterVault)
 
-	reg := e.Group("/register", middleware.BasicAuth(s.checkBasicAuthenticationUserOnly))
-	reg.POST("/vault", s.RegisterVault)
 	return e.Start(fmt.Sprintf(":%d", s.port))
 
 }
 func (s *Server) Ping(c echo.Context) error {
 	return c.String(http.StatusOK, "Voltix Router is running")
-}
-
-func (s *Server) checkBasicAuthentication(username, password string, c echo.Context) (bool, error) {
-	// allow keygen to bypass basic auth
-	if strings.EqualFold(c.Request().Header.Get("keygen"), "voltix") {
-		return true, nil
-	}
-	// client should encode the basic authentication
-	// apikey:pubkey
-	apiKey := username
-	vaultPubKey := password
-	// check cache
-	user, err := s.s.GetUser(c.Request().Context(), apiKey)
-	if err != nil {
-		c.Logger().Errorf("fail to get user %s from cache, err: %s", username, err)
-	}
-	if user != nil {
-		// check number of vaults
-		return s.checkUserAndVaultPubKey(c, user, vaultPubKey)
-	}
-	// fallback to database
-	user, err = s.dbs.GetUser(c.Request().Context(), apiKey)
-	if err != nil {
-		c.Logger().Errorf("fail to get user %s from db, err: %s", apiKey, err)
-		return false, err
-	}
-	if user != nil {
-		if user.IsValid() {
-			// save the user to cache
-			if err := s.s.SetUser(c.Request().Context(), user.APIKey, *user); err != nil {
-				c.Logger().Errorf("fail to save user to cache for %s, err: %s", user.APIKey, err)
-			}
-		}
-		return s.checkUserAndVaultPubKey(c, user, vaultPubKey)
-	}
-	return false, nil
-}
-
-func (s *Server) checkBasicAuthenticationUserOnly(username, password string, c echo.Context) (bool, error) {
-	// client should encode the basic authentication
-	// apikey:pubkey
-	apiKey := username
-	// check cache
-	user, err := s.s.GetUser(c.Request().Context(), apiKey)
-	if err != nil {
-		c.Logger().Errorf("fail to get user %s from cache, err: %s", username, err)
-	}
-	if user != nil {
-		if user.IsValid() {
-			c.Set("user", user)
-			return true, nil
-		}
-		return false, nil
-	}
-	// fallback to database
-	user, err = s.dbs.GetUser(c.Request().Context(), apiKey)
-	if err != nil {
-		c.Logger().Errorf("fail to get user %s from db, err: %s", apiKey, err)
-		return false, err
-	}
-	if user != nil {
-		if user.IsValid() {
-			c.Set("user", user)
-			// save the user to cache
-			if err := s.s.SetUser(c.Request().Context(), user.APIKey, *user); err != nil {
-				c.Logger().Errorf("fail to save user to cache for %s, err: %s", user.APIKey, err)
-			}
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (s *Server) checkUserAndVaultPubKey(c echo.Context, user *model.User, vaultPubKey string) (bool, error) {
-	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
-		return false, c.Request().Context().Err()
-	}
-	if !user.IsValid() {
-		return false, nil
-	}
-	c.Set("user", user)
-	if vaultPubKey == "" {
-		return false, nil
-	}
-	vaults, err := s.s.GetUserVault(c.Request().Context(), user.APIKey)
-	if err != nil {
-		c.Logger().Errorf("fail to get user vault %s, err: %s", user.APIKey, err)
-	}
-	if len(vaults) > 0 {
-		if slices.Contains(vaults, vaultPubKey) {
-			return true, nil
-		}
-	}
-	vaults, err = s.dbs.GetVaultPubKeys(c.Request().Context(), user.ID)
-	if err != nil {
-		c.Logger().Errorf("fail to get user vault %s, err: %s", user.APIKey, err)
-		return false, fmt.Errorf("fail to get user vault %s, err: %w", user.APIKey, err)
-	}
-	if len(vaults) > 0 {
-		// save it to cache
-		if err := s.s.SetUserVault(c.Request().Context(), user.APIKey, vaults); err != nil {
-			c.Logger().Errorf("fail to set user vault %s, err: %s", user.APIKey, err)
-		}
-		if slices.Contains(vaults, vaultPubKey) {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // StartSession is to start a new session that will be used to send and receive messages.
