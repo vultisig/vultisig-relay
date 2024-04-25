@@ -3,7 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
-	"github.com/rs/xid"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,7 +12,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 	"github.com/voltix-vault/voltix-router/contexthelper"
-	"github.com/voltix-vault/voltix-router/db"
 	"github.com/voltix-vault/voltix-router/model"
 	"github.com/voltix-vault/voltix-router/storage"
 )
@@ -20,15 +19,13 @@ import (
 type Server struct {
 	port int64
 	s    storage.Storage
-	dbs  *db.DBStorage
 }
 
 // NewServer returns a new server.
-func NewServer(port int64, s storage.Storage, dbs *db.DBStorage) *Server {
+func NewServer(port int64, s storage.Storage) *Server {
 	return &Server{
 		port: port,
 		s:    s,
-		dbs:  dbs,
 	}
 }
 
@@ -51,7 +48,8 @@ func (s *Server) StartServer() error {
 	group.GET("/start/:sessionID", s.GetStartTSSSession)
 	group.POST("/complete/:sessionID", s.SetCompleteTSSSession)
 	group.GET("/complete/:sessionID", s.GetCompleteTSSSession)
-	group.POST("/register", s.RegisterVault)
+	group.POST("/complete/:sessionID/keysign", s.SetKeysignFinished)
+	group.GET("/complete/:sessionID/keysign", s.GetKeysignFinished)
 
 	return e.Start(fmt.Sprintf(":%d", s.port))
 
@@ -238,39 +236,38 @@ func (s *Server) SetCompleteTSSSession(c echo.Context) error {
 func (s *Server) GetCompleteTSSSession(c echo.Context) error {
 	return s.getTSSSession(c, "complete")
 }
-func (s *Server) RegisterVault(c echo.Context) error {
+func (s *Server) SetKeysignFinished(c echo.Context) error {
 	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
 		return c.NoContent(http.StatusRequestTimeout)
 	}
-	user := c.Get("user").(*model.User)
-	if user == nil {
-		return c.NoContent(http.StatusUnauthorized)
-	}
-
-	var vaultKeys struct {
-		PubKeyECDSA string `json:"pub_key_ecdsa,omitempty"`
-		PubKeyEdDSA string `json:"pub_key_eddsa,omitempty"`
-	}
-
-	if err := c.Bind(&vaultKeys); err != nil {
-		c.Logger().Error(err)
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	if err := s.dbs.RegisterVault(c.Request().Context(), user.ID, vaultKeys.PubKeyECDSA, vaultKeys.PubKeyEdDSA, user.NoOfVaults); err != nil {
-		c.Logger().Error(err)
+	messageID := c.Request().Header.Get("message_id")
+	key := fmt.Sprintf("keysign-%s-%s-complete", sessionID, messageID)
+	input, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	if s.s.SetValue(c.Request().Context(), key, string(input)) != nil {
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	return c.NoContent(http.StatusCreated)
+	return c.NoContent(http.StatusOK)
 }
-
-func (s *Server) CreateUserAPIKey(c echo.Context) error {
+func (s *Server) GetKeysignFinished(c echo.Context) error {
 	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
 		return c.NoContent(http.StatusRequestTimeout)
 	}
-	apiKey := xid.New().String()
-	if err := s.dbs.NewUser(c.Request().Context(), apiKey); err != nil {
-		c.Logger().Errorf("fail to create user %s, err: %s", apiKey, err)
-		return c.NoContent(http.StatusInternalServerError)
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		return c.NoContent(http.StatusBadRequest)
 	}
-	return c.JSON(http.StatusCreated, apiKey)
+	messageID := c.Request().Header.Get("message_id")
+	key := fmt.Sprintf("keysign-%s-%s-complete", sessionID, messageID)
+	value, err := s.s.GetValue(c.Request().Context(), key)
+	if err != nil {
+		return c.NoContent(http.StatusNotFound)
+	}
+	return c.String(http.StatusOK, value)
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"github.com/voltix-vault/voltix-router/config"
-	"github.com/voltix-vault/voltix-router/db"
 	"github.com/voltix-vault/voltix-router/server"
 	"github.com/voltix-vault/voltix-router/storage"
 )
@@ -21,18 +20,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	dbs, err := db.NewDBStorage(cfg.ConnectionString)
-	if err != nil {
-		panic(err)
-	}
-	s := server.NewServer(cfg.Port, store, dbs)
+	s := server.NewServer(cfg.Port, store)
 	if err := s.StartServer(); err != nil {
 		panic(err)
 	}
-	err = dbs.Close()
-	if err != nil {
-		panic(err)
-	}
+
 	err = store.Close()
 	if err != nil {
 		panic(err)

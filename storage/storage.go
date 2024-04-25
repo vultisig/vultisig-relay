@@ -28,6 +28,8 @@ type Storage interface {
 	SetUser(ctx context.Context, apiKey string, user model.User) error
 	GetUserVault(ctx context.Context, apiKey string) ([]string, error)
 	SetUserVault(ctx context.Context, apiKey string, vaultPubKeys []string) error
+	SetValue(ctx context.Context, key string, value string) error
+	GetValue(ctx context.Context, key string) (string, error)
 }
 
 var _ Storage = (*RedisStorage)(nil)
@@ -261,6 +263,27 @@ func (s *RedisStorage) SetUserVault(ctx context.Context, apiKey string, vaultPub
 		return fmt.Errorf("fail to set expiration, err: %w", result.Err())
 	}
 	return nil
+}
+func (s *RedisStorage) SetValue(ctx context.Context, key string, value string) error {
+	if contexthelper.CheckCancellation(ctx) != nil {
+		return ctx.Err()
+	}
+	if status := s.client.Set(ctx, key, value, s.defaultUserExpire); status.Err() != nil {
+		return fmt.Errorf("fail to set value %s, err: %w", key, status.Err())
+	}
+
+	return nil
+}
+
+func (s *RedisStorage) GetValue(ctx context.Context, key string) (string, error) {
+	if contexthelper.CheckCancellation(ctx) != nil {
+		return "", ctx.Err()
+	}
+	result, err := s.client.Get(ctx, key).Result()
+	if err != nil {
+		return "", fmt.Errorf("fail to get value %s, err: %w", key, err)
+	}
+	return result, nil
 }
 
 func (s *RedisStorage) Close() error {
