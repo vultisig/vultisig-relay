@@ -2,15 +2,15 @@ services:
   redis:
     image: redis:alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
 
   mysql:
-    image: mysql:5.7
+    image: mysql
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT}:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: voltix
+      MYSQL_DATABASE: database
       MYSQL_USER: user
       MYSQL_PASSWORD: password
