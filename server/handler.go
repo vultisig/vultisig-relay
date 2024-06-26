@@ -35,6 +35,8 @@ func (s *Server) StartServer() error {
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	//enable cors
+	e.Use(middleware.CORS())
 	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
 	e.GET("/ping", s.Ping)
 	group := e.Group("")
