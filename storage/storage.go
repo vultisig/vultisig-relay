@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/voltix-vault/voltix-router/contexthelper"
 	"time"
 
+	"github.com/voltix-vault/voltix-router/contexthelper"
+
 	"github.com/redis/go-redis/v9"
+
 	"github.com/voltix-vault/voltix-router/config"
 	"github.com/voltix-vault/voltix-router/model"
 )
@@ -70,7 +72,7 @@ func (s *RedisStorage) SetSession(ctx context.Context, key string, participants 
 	if err != nil {
 		return fmt.Errorf("fail to get existing session %s, err: %w", key, err)
 	}
-
+	var participantsToAdd []string
 	for _, p := range participants {
 		needAdd := true
 		for _, existingP := range existingParticipants {
@@ -81,10 +83,10 @@ func (s *RedisStorage) SetSession(ctx context.Context, key string, participants 
 		}
 		// add the participant if it does not exist
 		if needAdd {
-			existingParticipants = append(existingParticipants, p)
+			participantsToAdd = append(participantsToAdd, p)
 		}
 	}
-	if result := s.client.RPush(ctx, key, existingParticipants); result.Err() != nil {
+	if result := s.client.RPush(ctx, key, participantsToAdd); result.Err() != nil {
 		return fmt.Errorf("fail to set session %s, err: %w", key, result.Err())
 	}
 	if result := s.client.Expire(ctx, key, s.defaultExpiration); result.Err() != nil {
