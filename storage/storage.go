@@ -9,9 +9,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/vultisig/vultisig-router/config"
-	"github.com/vultisig/vultisig-router/contexthelper"
-	"github.com/vultisig/vultisig-router/model"
+	"github.com/vultisig/vultisig-relay/config"
+	"github.com/vultisig/vultisig-relay/contexthelper"
+	"github.com/vultisig/vultisig-relay/model"
 )
 
 var ErrNotFound = errors.New("not found")

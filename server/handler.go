@@ -12,9 +12,9 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 
-	"github.com/vultisig/vultisig-router/contexthelper"
-	"github.com/vultisig/vultisig-router/model"
-	"github.com/vultisig/vultisig-router/storage"
+	"github.com/vultisig/vultisig-relay/contexthelper"
+	"github.com/vultisig/vultisig-relay/model"
+	"github.com/vultisig/vultisig-relay/storage"
 )
 
 type Server struct {
