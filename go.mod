@@ -1,4 +1,4 @@
-module github.com/vultisig/vultisig-router
+module github.com/vultisig/vultisig-relay
 
 go 1.21.7
 

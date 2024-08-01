@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 
-	"github.com/vultisig/vultisig-router/config"
-	"github.com/vultisig/vultisig-router/server"
-	"github.com/vultisig/vultisig-router/storage"
+	"github.com/vultisig/vultisig-relay/config"
+	"github.com/vultisig/vultisig-relay/server"
+	"github.com/vultisig/vultisig-relay/storage"
 )
 
 func main() {
