@@ -26,10 +26,6 @@ type Storage interface {
 	SetMessage(ctx context.Context, key string, message model.Message) error
 	DeleteMessages(ctx context.Context, key string) error
 	DeleteMessage(ctx context.Context, key string, hash string) error
-	GetUser(ctx context.Context, apiKey string) (*model.User, error)
-	SetUser(ctx context.Context, apiKey string, user model.User) error
-	GetUserVault(ctx context.Context, apiKey string) ([]string, error)
-	SetUserVault(ctx context.Context, apiKey string, vaultPubKeys []string) error
 	SetValue(ctx context.Context, key string, value string) error
 	GetValue(ctx context.Context, key string) (string, error)
 }
@@ -214,58 +210,6 @@ func (s *RedisStorage) DeleteMessage(ctx context.Context, key, hash string) erro
 	return nil
 }
 
-func (s *RedisStorage) GetUser(ctx context.Context, apiKey string) (*model.User, error) {
-	if contexthelper.CheckCancellation(ctx) != nil {
-		return nil, ctx.Err()
-	}
-	result, err := s.client.Get(ctx, apiKey).Result()
-	if err != nil {
-		return nil, fmt.Errorf("fail to get user %s, err: %w", apiKey, err)
-	}
-	var user model.User
-	if err := json.Unmarshal([]byte(result), &user); err != nil {
-		return nil, fmt.Errorf("fail to unmarshal user, err: %w", err)
-	}
-	return &user, nil
-}
-func (s *RedisStorage) SetUser(ctx context.Context, apiKey string, user model.User) error {
-	if contexthelper.CheckCancellation(ctx) != nil {
-		return ctx.Err()
-	}
-	buf, err := json.Marshal(user)
-	if err != nil {
-		return fmt.Errorf("fail to marshal user, err: %w", err)
-	}
-	if status := s.client.Set(ctx, apiKey, string(buf), s.defaultUserExpire); status.Err() != nil {
-		return fmt.Errorf("fail to set user, err: %w", status.Err())
-	}
-	return nil
-}
-func (s *RedisStorage) GetUserVault(ctx context.Context, apiKey string) ([]string, error) {
-	if contexthelper.CheckCancellation(ctx) != nil {
-		return nil, ctx.Err()
-	}
-	key := fmt.Sprintf("vaults-%s", apiKey)
-	result, err := s.client.LRange(ctx, key, 0, -1).Result()
-	if err != nil {
-		return nil, fmt.Errorf("fail to get user vault %s, err: %w", apiKey, err)
-	}
-	return result, nil
-}
-
-func (s *RedisStorage) SetUserVault(ctx context.Context, apiKey string, vaultPubKeys []string) error {
-	if contexthelper.CheckCancellation(ctx) != nil {
-		return ctx.Err()
-	}
-	key := fmt.Sprintf("vaults-%s", apiKey)
-	if status := s.client.RPush(ctx, key, vaultPubKeys); status.Err() != nil {
-		return fmt.Errorf("fail to set user vault %s, err: %w", apiKey, status.Err())
-	}
-	if result := s.client.Expire(ctx, key, s.defaultUserExpire); result.Err() != nil {
-		return fmt.Errorf("fail to set expiration, err: %w", result.Err())
-	}
-	return nil
-}
 func (s *RedisStorage) SetValue(ctx context.Context, key string, value string) error {
 	if contexthelper.CheckCancellation(ctx) != nil {
 		return ctx.Err()
