@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -20,6 +22,7 @@ import (
 type Server struct {
 	port int64
 	s    storage.Storage
+	e    *echo.Echo
 }
 
 // NewServer returns a new server.
@@ -27,11 +30,12 @@ func NewServer(port int64, s storage.Storage) *Server {
 	return &Server{
 		port: port,
 		s:    s,
+		e:    echo.New(),
 	}
 }
 
 func (s *Server) StartServer() error {
-	e := echo.New()
+	e := s.e
 	e.Logger.SetLevel(log.DEBUG)
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Use(middleware.Logger())
@@ -53,9 +57,13 @@ func (s *Server) StartServer() error {
 	group.GET("/complete/:sessionID", s.GetCompleteTSSSession)
 	group.POST("/complete/:sessionID/keysign", s.SetKeysignFinished)
 	group.GET("/complete/:sessionID/keysign", s.GetKeysignFinished)
-
 	return e.Start(fmt.Sprintf(":%d", s.port))
+}
 
+func (s *Server) StopServer() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	return s.e.Shutdown(ctx)
 }
 func (s *Server) Ping(c echo.Context) error {
 	return c.String(http.StatusOK, "Voltix Router is running")
