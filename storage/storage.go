@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/voltix-vault/voltix-router/contexthelper"
-
 	"github.com/redis/go-redis/v9"
 
-	"github.com/voltix-vault/voltix-router/config"
-	"github.com/voltix-vault/voltix-router/model"
+	"github.com/vultisig/vultisig-router/config"
+	"github.com/vultisig/vultisig-router/contexthelper"
+	"github.com/vultisig/vultisig-router/model"
 )
 
 var ErrNotFound = errors.New("not found")

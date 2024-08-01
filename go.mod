@@ -1,4 +1,4 @@
-module github.com/voltix-vault/voltix-router
+module github.com/vultisig/vultisig-router
 
 go 1.21.7
 
