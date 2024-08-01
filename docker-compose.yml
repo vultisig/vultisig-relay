@@ -4,13 +4,3 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
-
-  mysql:
-    image: mysql
-    ports:
-      - "${MYSQL_PORT}:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: database
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
