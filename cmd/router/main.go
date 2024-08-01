@@ -2,9 +2,10 @@ package main
 
 import (
 	"flag"
-	"github.com/voltix-vault/voltix-router/config"
-	"github.com/voltix-vault/voltix-router/server"
-	"github.com/voltix-vault/voltix-router/storage"
+
+	"github.com/vultisig/vultisig-router/config"
+	"github.com/vultisig/vultisig-router/server"
+	"github.com/vultisig/vultisig-router/storage"
 )
 
 func main() {

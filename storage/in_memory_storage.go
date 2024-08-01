@@ -7,8 +7,8 @@ import (
 
 	"github.com/patrickmn/go-cache"
 
-	"github.com/voltix-vault/voltix-router/contexthelper"
-	"github.com/voltix-vault/voltix-router/model"
+	"github.com/vultisig/vultisig-router/contexthelper"
+	"github.com/vultisig/vultisig-router/model"
 )
 
 var _ Storage = (*InMemoryStorage)(nil)
