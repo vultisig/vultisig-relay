@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,7 +28,7 @@ func (s *InMemoryStorage) SetSession(ctx context.Context, key string, participan
 		return ctx.Err()
 	}
 	existingParticipants, err := s.GetSession(ctx, key)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return fmt.Errorf("fail to get existing session %s, err: %w", key, err)
 	}
 	var participantsToAdd []string
@@ -55,7 +56,7 @@ func (s *InMemoryStorage) GetSession(ctx context.Context, key string) ([]string,
 	if x, found := s.cache.Get(key); found {
 		return x.([]string), nil
 	}
-	return nil, fmt.Errorf("session not found")
+	return nil, ErrNotFound
 }
 
 func (s *InMemoryStorage) DeleteSession(ctx context.Context, key string) error {
