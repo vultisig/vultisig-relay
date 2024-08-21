@@ -74,7 +74,7 @@ func (s *InMemoryStorage) GetMessages(ctx context.Context, key string) ([]model.
 	if x, found := s.cache.Get(key); found {
 		return x.([]model.Message), nil
 	}
-	return nil, fmt.Errorf("messages not found")
+	return []model.Message{}, nil
 }
 
 func (s *InMemoryStorage) SetMessage(ctx context.Context, key string, message model.Message) error {
