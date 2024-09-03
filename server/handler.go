@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DataDog/datadog-go/statsd"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -20,20 +21,35 @@ import (
 )
 
 type Server struct {
-	port int64
-	s    storage.Storage
-	e    *echo.Echo
+	port     int64
+	s        storage.Storage
+	e        *echo.Echo
+	sdClient *statsd.Client
 }
 
 // NewServer returns a new server.
-func NewServer(port int64, s storage.Storage) *Server {
+func NewServer(port int64, s storage.Storage, sdClient *statsd.Client) *Server {
 	return &Server{
-		port: port,
-		s:    s,
-		e:    echo.New(),
+		port:     port,
+		s:        s,
+		e:        echo.New(),
+		sdClient: sdClient,
 	}
 }
+func (s *Server) statsdMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		start := time.Now()
+		err := next(c)
+		duration := time.Since(start).Milliseconds()
 
+		// Send metrics to statsd
+		_ = s.sdClient.Incr("http.requests", []string{"path:" + c.Path()}, 1)
+		_ = s.sdClient.Timing("http.response_time", time.Duration(duration)*time.Millisecond, []string{"path:" + c.Path()}, 1)
+		_ = s.sdClient.Incr("http.status."+fmt.Sprint(c.Response().Status), []string{"path:" + c.Path(), "method:" + c.Request().Method}, 1)
+
+		return err
+	}
+}
 func (s *Server) StartServer() error {
 	e := s.e
 	e.Logger.SetLevel(log.DEBUG)
@@ -43,6 +59,7 @@ func (s *Server) StartServer() error {
 	//enable cors
 	e.Use(middleware.CORS())
 	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
+	e.Use(s.statsdMiddleware)
 	e.GET("/ping", s.Ping)
 	group := e.Group("")
 	group.POST("/:sessionID", s.StartSession)

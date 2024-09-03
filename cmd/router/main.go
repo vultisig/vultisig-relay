@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 
+	"github.com/DataDog/datadog-go/statsd"
+
 	"github.com/vultisig/vultisig-relay/config"
 	"github.com/vultisig/vultisig-relay/server"
 	"github.com/vultisig/vultisig-relay/storage"
@@ -21,7 +23,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	s := server.NewServer(cfg.Port, store)
+	sdClient, err := statsd.New("127.0.0.1:8125")
+	if err != nil {
+		panic(err)
+	}
+	s := server.NewServer(cfg.Port, store, sdClient)
 	if err := s.StartServer(); err != nil {
 		panic(err)
 	}
