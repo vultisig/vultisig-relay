@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -57,6 +59,8 @@ func (s *Server) StartServer() error {
 	group.GET("/complete/:sessionID", s.GetCompleteTSSSession)
 	group.POST("/complete/:sessionID/keysign", s.SetKeysignFinished)
 	group.GET("/complete/:sessionID/keysign", s.GetKeysignFinished)
+	group.POST("/payload/:hash", s.HandlePayloadMessage)
+	group.GET("/payload/:hash", s.GetPayloadMessage)
 	return e.Start(fmt.Sprintf(":%d", s.port))
 }
 
@@ -279,6 +283,54 @@ func (s *Server) GetKeysignFinished(c echo.Context) error {
 	value, err := s.s.GetValue(c.Request().Context(), key)
 	if err != nil {
 		return c.NoContent(http.StatusNotFound)
+	}
+	return c.String(http.StatusOK, value)
+}
+
+func (s *Server) HandlePayloadMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	hash := strings.TrimSpace(c.Param("hash"))
+	if hash == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	input, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusBadRequest)
+	}
+	h := sha256.New()
+	h.Write(input)
+	result := hex.EncodeToString(h.Sum(nil))
+	if result != hash {
+		c.Logger().Error("hash does not match, expected ", hash, ", got ", result)
+		return c.NoContent(http.StatusBadRequest)
+	}
+
+	if err := s.s.SetValue(c.Request().Context(), result, string(input)); err != nil {
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.NoContent(http.StatusOK)
+}
+
+func (s *Server) GetPayloadMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	hash := strings.TrimSpace(c.Param("hash"))
+	if hash == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	value, err := s.s.GetValue(c.Request().Context(), hash)
+	if err != nil {
+		return c.NoContent(http.StatusNotFound)
+	}
+	h := sha256.New()
+	h.Write([]byte(value))
+	result := hex.EncodeToString(h.Sum(nil))
+	if result != hash {
+		return c.NoContent(http.StatusInternalServerError)
 	}
 	return c.String(http.StatusOK, value)
 }
