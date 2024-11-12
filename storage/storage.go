@@ -81,8 +81,10 @@ func (s *RedisStorage) SetSession(ctx context.Context, key string, participants 
 			participantsToAdd = append(participantsToAdd, p)
 		}
 	}
-	if result := s.client.RPush(ctx, key, participantsToAdd); result.Err() != nil {
-		return fmt.Errorf("fail to set session %s, err: %w", key, result.Err())
+	if len(participantsToAdd) > 0 {
+		if result := s.client.RPush(ctx, key, participantsToAdd); result.Err() != nil {
+			return fmt.Errorf("fail to set session %s, err: %w", key, result.Err())
+		}
 	}
 	if result := s.client.Expire(ctx, key, s.defaultExpiration); result.Err() != nil {
 		return fmt.Errorf("fail to set expiration, err: %w", result.Err())
