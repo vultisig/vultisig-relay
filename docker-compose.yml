@@ -4,3 +4,4 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
+
