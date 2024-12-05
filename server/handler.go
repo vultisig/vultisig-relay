@@ -61,6 +61,8 @@ func (s *Server) StartServer() error {
 	group.GET("/complete/:sessionID/keysign", s.GetKeysignFinished)
 	group.POST("/payload/:hash", s.HandlePayloadMessage)
 	group.GET("/payload/:hash", s.GetPayloadMessage)
+	group.POST("/setup-message/:sessionID", s.PostSetupMessage)
+	group.GET("/setup-message/:sessionID", s.GetSetupMessage)
 	return e.Start(fmt.Sprintf(":%d", s.port))
 }
 
@@ -331,6 +333,41 @@ func (s *Server) GetPayloadMessage(c echo.Context) error {
 	result := hex.EncodeToString(h.Sum(nil))
 	if result != hash {
 		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.String(http.StatusOK, value)
+}
+
+func (s *Server) PostSetupMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	key := fmt.Sprintf("setup-%s", sessionID)
+	input, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		c.Logger().Error(err)
+		return c.NoContent(http.StatusBadRequest)
+	}
+	if s.s.SetValue(c.Request().Context(), key, string(input)) != nil {
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	return c.NoContent(http.StatusCreated)
+}
+func (s *Server) GetSetupMessage(c echo.Context) error {
+	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
+		return c.NoContent(http.StatusRequestTimeout)
+	}
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	key := fmt.Sprintf("setup-%s", sessionID)
+	value, err := s.s.GetValue(c.Request().Context(), key)
+	if err != nil {
+		return c.NoContent(http.StatusNotFound)
 	}
 	return c.String(http.StatusOK, value)
 }
