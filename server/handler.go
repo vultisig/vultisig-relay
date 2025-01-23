@@ -42,7 +42,7 @@ func (s *Server) StartServer() error {
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	//enable cors
+	// enable cors
 	e.Use(middleware.CORS())
 	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
 	e.GET("/ping", s.Ping)
@@ -346,6 +346,10 @@ func (s *Server) PostSetupMessage(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	key := fmt.Sprintf("setup-%s", sessionID)
+	messageID := c.Request().Header.Get("message_id")
+	if messageID != "" {
+		key = fmt.Sprintf("setup-%s-%s", sessionID, messageID)
+	}
 	input, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		c.Logger().Error(err)
@@ -356,6 +360,7 @@ func (s *Server) PostSetupMessage(c echo.Context) error {
 	}
 	return c.NoContent(http.StatusCreated)
 }
+
 func (s *Server) GetSetupMessage(c echo.Context) error {
 	if contexthelper.CheckCancellation(c.Request().Context()) != nil {
 		return c.NoContent(http.StatusRequestTimeout)
@@ -365,6 +370,10 @@ func (s *Server) GetSetupMessage(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	key := fmt.Sprintf("setup-%s", sessionID)
+	messageID := c.Request().Header.Get("message_id")
+	if messageID != "" {
+		key = fmt.Sprintf("setup-%s-%s", sessionID, messageID)
+	}
 	value, err := s.s.GetValue(c.Request().Context(), key)
 	if err != nil {
 		return c.NoContent(http.StatusNotFound)
