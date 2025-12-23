@@ -2,14 +2,14 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
+	"strconv"
 )
 
 type Config struct {
-	Port             int64       `json:"port"`
-	RedisServer      RedisServer `json:"redis_server"`
-	ConnectionString string      `json:"connection_string"`
+	Port        int64       `json:"port"`
+	RedisServer RedisServer `json:"redis_server"`
+	RedisURI    string      `json:"redis_uri"`
 }
 
 type RedisServer struct {
@@ -19,21 +19,29 @@ type RedisServer struct {
 	DB       int    `json:"db"`
 }
 
-// LoadConfig loads the configuration from a file.
-func LoadConfig(file string) (*Config, error) {
+func LoadConfig(file string) *Config {
+	cfg := &Config{
+		Port: 80,
+	}
+
 	f, err := os.Open(file)
-	if err != nil {
-		return nil, fmt.Errorf("fail to open config file %s, err: %w", file, err)
+	if err == nil {
+		defer func() {
+			_ = f.Close()
+		}()
+		_ = json.NewDecoder(f).Decode(cfg)
 	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			fmt.Println("fail to close file", err)
+
+	if portStr := os.Getenv("PORT"); portStr != "" {
+		p, err := strconv.ParseInt(portStr, 10, 64)
+		if err == nil {
+			cfg.Port = p
 		}
-	}(f)
-	var cfg Config
-	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("fail to decode config file %s, err: %w", file, err)
 	}
-	return &cfg, nil
+
+	if redisURI := os.Getenv("REDIS_URI"); redisURI != "" {
+		cfg.RedisURI = redisURI
+	}
+
+	return cfg
 }

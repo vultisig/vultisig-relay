@@ -46,6 +46,7 @@ func (s *Server) StartServer() error {
 	e.Use(middleware.CORS())
 	e.Use(middleware.BodyLimit("100M")) // set maximum allowed size for a request body to 100M
 	e.GET("/ping", s.Ping)
+	e.GET("/healthz", s.Healthz)
 	group := e.Group("")
 	group.POST("/:sessionID", s.StartSession)
 	group.GET("/:sessionID", s.GetSession)
@@ -73,6 +74,10 @@ func (s *Server) StopServer() error {
 }
 func (s *Server) Ping(c echo.Context) error {
 	return c.String(http.StatusOK, "Voltix Router is running")
+}
+
+func (s *Server) Healthz(c echo.Context) error {
+	return c.NoContent(http.StatusOK)
 }
 
 // StartSession is to start a new session that will be used to send and receive messages.
