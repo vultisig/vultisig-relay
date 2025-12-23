@@ -15,6 +15,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    env:
+      NS: relay
+      CLUSTER: plugins-dev-k8s
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,7 +28,7 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_CI_TOKEN }}
 
       - name: Get kubeconfig
-        run: doctl kubernetes cluster kubeconfig save plugins-dev-k8s
+        run: doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER }}
 
       - name: Update deployment image
         run: |
@@ -33,8 +36,8 @@ jobs:
 
       - name: Deploy to Kubernetes
         run: |
-          kubectl apply -f deploy/01_router.yaml
+          kubectl -n ${{ env.NS }} apply -f deploy/01_router.yaml
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/router -n router --timeout=300s
+          kubectl -n ${{ env.NS }} rollout status deployment/router --timeout=300s
