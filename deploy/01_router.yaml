@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: router
+spec:
+  selector:
+    app: router
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  namespace: router
+  labels:
+    app: router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: router
+  template:
+    metadata:
+      labels:
+        app: router
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/healthz"
+    spec:
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: router
+          image: busybox
+          command: ["/app/relay"]
+          ports:
+            - containerPort: 80
+          env:
+            - name: PORT
+              value: "80"
+            - name: REDIS_URI
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: uri
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
