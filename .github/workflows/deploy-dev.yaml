@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/build-push-image.yaml
+    permissions:
+      contents: read
+      packages: write
     with:
       tag: dev-${{ github.sha }}
       additional_tag: dev-latest
