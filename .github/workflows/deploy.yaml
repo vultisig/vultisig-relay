@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/build-push-image.yaml
+    permissions:
+      contents: read
+      packages: write
     with:
       tag: ${{ github.event.release.tag_name }}
       additional_tag: latest
