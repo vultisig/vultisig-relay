@@ -40,6 +40,7 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           kubectl -n ${{ env.NS }} apply -f deploy/01_router.yaml
+          kubectl -n ${{ env.NS }} apply -f deploy/dev/
 
       - name: Wait for rollout
         run: |
