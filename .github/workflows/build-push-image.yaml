@@ -34,7 +34,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/vultisig/router:${{ inputs.tag }}
-            ${{ inputs.additional_tag != '' && format('ghcr.io/vultisig/router:{0}', inputs.additional_tag) || '' }}
+            ghcr.io/vultisig/vultisig-relay/router:${{ inputs.tag }}
+            ${{ inputs.additional_tag != '' && format('ghcr.io/vultisig/vultisig-relay/router:{0}', inputs.additional_tag) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
