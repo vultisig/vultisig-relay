@@ -31,7 +31,7 @@ jobs:
 
       - name: Update deployment image
         run: |
-          sed -i 's|image: busybox|image: ghcr.io/vultisig/router:${{ github.event.release.tag_name }}|g' deploy/01_router.yaml
+          sed -i 's|image: busybox|image: ghcr.io/vultisig/vultisig-relay/router:${{ github.event.release.tag_name }}|g' deploy/01_router.yaml
 
       - name: Deploy to Kubernetes
         run: |
