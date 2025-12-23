@@ -8,10 +8,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - relay-router.prod.plugins.vultisig.com
+        - relay-router.dev.plugins.vultisig.com
       secretName: relay-router-tls
   rules:
-    - host: relay-router.prod.plugins.vultisig.com
+    - host: relay-router.dev.plugins.vultisig.com
       http:
         paths:
           - path: /
