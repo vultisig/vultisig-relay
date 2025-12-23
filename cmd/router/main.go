@@ -16,6 +16,7 @@ func main() {
 	cfg := config.LoadConfig(cfgFile)
 
 	var store *storage.RedisStorage
+
 	var err error
 	if cfg.RedisURI != "" {
 		store, err = storage.NewRedisStorageFromURI(cfg.RedisURI)
