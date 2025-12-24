@@ -32,11 +32,13 @@ type Storage interface {
 var _ Storage = (*RedisStorage)(nil)
 
 type RedisStorage struct {
+	cfg               config.RedisServer
 	client            *redis.Client
 	defaultExpiration time.Duration
 	defaultUserExpire time.Duration
 }
 
+// NewRedisStorage returns a new storage that use redis
 func NewRedisStorage(cfg config.RedisServer) (*RedisStorage, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Addr,
@@ -46,26 +48,10 @@ func NewRedisStorage(cfg config.RedisServer) (*RedisStorage, error) {
 	})
 	status := client.Ping(context.Background())
 	if status.Err() != nil {
-		return nil, fmt.Errorf("fail to ping redis: %w", status.Err())
+		return nil, status.Err()
 	}
 	return &RedisStorage{
-		client:            client,
-		defaultExpiration: time.Minute * 5,
-		defaultUserExpire: time.Hour,
-	}, nil
-}
-
-func NewRedisStorageFromURI(uri string) (*RedisStorage, error) {
-	opts, err := redis.ParseURL(uri)
-	if err != nil {
-		return nil, fmt.Errorf("fail to parse redis uri: %w", err)
-	}
-	client := redis.NewClient(opts)
-	status := client.Ping(context.Background())
-	if status.Err() != nil {
-		return nil, fmt.Errorf("fail to ping redis: %w", status.Err())
-	}
-	return &RedisStorage{
+		cfg:               cfg,
 		client:            client,
 		defaultExpiration: time.Minute * 5,
 		defaultUserExpire: time.Hour,
