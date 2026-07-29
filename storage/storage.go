@@ -81,6 +81,10 @@ func (s *RedisStorage) SetSession(ctx context.Context, key string, participants 
 			participantsToAdd = append(participantsToAdd, p)
 		}
 	}
+	if len(participantsToAdd) == 0 {
+		// nothing new to add, all posted participants are already registered
+		return nil
+	}
 	if result := s.client.RPush(ctx, key, participantsToAdd); result.Err() != nil {
 		return fmt.Errorf("fail to set session %s, err: %w", key, result.Err())
 	}
